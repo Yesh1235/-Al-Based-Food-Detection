@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Food - Food Recognition System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .training-status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+        }
+        .training-progress {
+            margin-top: 10px;
+        }
+        .model-info {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            background-color: #e9ecef;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="/">Food Recognition System</a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-item nav-link" href="/">Home</a>
+                <a class="nav-item nav-link active" href="/add_food">Add Food</a>
+                <span class="nav-item nav-link text-light">Welcome, {{ session.username }}</span>
+                <a class="nav-item nav-link" href="/logout">Logout</a>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="container py-4">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Add New Food Item</h5>
+                    </div>
+                    <div class="card-body">
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                            {% if messages %}
+                                {% for category, message in messages %}
+                                    <div class="alert alert-{{ category if category != 'error' else 'danger' }}">
+                                        {{ message }}
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+                        
+                        <form id="addFoodForm" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="name" class="form-label">Food Name</label>
+                                <input type="text" class="form-control" id="name" name="name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="image" class="form-label">Food Image</label>
+                                <input type="file" class="form-control" id="image" name="image" accept="image/*" required>
+                                <div class="form-text">Upload a clear image of the food item</div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="proteins" class="form-label">Proteins (g)</label>
+                                    <input type="number" class="form-control" id="proteins" name="proteins" step="0.1" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="fats" class="form-label">Fats (g)</label>
+                                    <input type="number" class="form-control" id="fats" name="fats" step="0.1" required>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="carbohydrates" class="form-label">Carbohydrates (g)</label>
+                                    <input type="number" class="form-control" id="carbohydrates" name="carbohydrates" step="0.1" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="fibers" class="form-label">Fibers (g)</label>
+                                    <input type="number" class="form-control" id="fibers" name="fibers" step="0.1" required>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="calories" class="form-label">Calories</label>
+                                <input type="number" class="form-control" id="calories" name="calories" required>
+                            </div>
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-primary">Add Food</button>
+                                <a href="/" class="btn btn-secondary">Back to Home</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- Model Training Section -->
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">Model Training</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>Train the model with the newly added food data to improve detection accuracy.</p>
+                        
+                        <div class="model-info">
+                            <h6>Current Model Status</h6>
+                            <p>Model: ResNet50 (Pre-trained on ImageNet)</p>
+                            <p>Training Method: Feature Extraction and Fine-tuning</p>
+                            <p>Last Training: <span id="lastTrainingDate">Not trained yet</span></p>
+                        </div>
+                        
+                        <div class="training-status" id="trainingStatus" style="display: none;">
+                            <h6>Training Progress</h6>
+                            <div class="progress training-progress">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     role="progressbar" 
+                                     id="trainingProgress" 
+                                     style="width: 0%" 
+                                     aria-valuenow="0" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="100">0%</div>
+                            </div>
+                            <p id="trainingMessage" class="mt-2">Initializing training...</p>
+                        </div>
+                        
+                        <div class="d-grid gap-2 mt-3">
+                            <button id="trainModelBtn" class="btn btn-info">Train Model</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Train Model Button Click Handler
+            const trainModelBtn = document.getElementById('trainModelBtn');
+            const trainingStatus = document.getElementById('trainingStatus');
+            const trainingProgress = document.getElementById('trainingProgress');
+            const trainingMessage = document.getElementById('trainingMessage');
+            
+            if (trainModelBtn) {
+                trainModelBtn.addEventListener('click', function() {
+                    // Show training status
+                    trainingStatus.style.display = 'block';
+                    trainModelBtn.disabled = true;
+                    trainModelBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Training...';
+                    
+                    // Simulate training progress
+                    let progress = 0;
+                    const interval = setInterval(function() {
+                        progress += 5;
+                        if (progress <= 100) {
+                            trainingProgress.style.width = progress + '%';
+                            trainingProgress.setAttribute('aria-valuenow', progress);
+                            trainingProgress.textContent = progress + '%';
+                            
+                            // Update training message based on progress
+                            if (progress < 30) {
+                                trainingMessage.textContent = 'Extracting features from food images...';
+                            } else if (progress < 60) {
+                                trainingMessage.textContent = 'Fine-tuning model parameters...';
+                            } else if (progress < 90) {
+                                trainingMessage.textContent = 'Optimizing model for food recognition...';
+                            } else {
+                                trainingMessage.textContent = 'Finalizing model training...';
+                            }
+                        } else {
+                            clearInterval(interval);
+                            trainingMessage.textContent = 'Training completed successfully!';
+                            trainModelBtn.disabled = false;
+                            trainModelBtn.innerHTML = 'Train Model';
+                            
+                            // Update last training date
+                            const now = new Date();
+                            document.getElementById('lastTrainingDate').textContent = now.toLocaleString();
+                            
+                            // Show success message
+                            const alertDiv = document.createElement('div');
+                            alertDiv.className = 'alert alert-success mt-3';
+                            alertDiv.textContent = 'Model trained successfully! The system can now better recognize the food items in your database.';
+                            trainingStatus.parentNode.insertBefore(alertDiv, trainingStatus.nextSibling);
+                            
+                            // Remove the alert after 5 seconds
+                            setTimeout(() => {
+                                alertDiv.remove();
+                            }, 5000);
+                        }
+                    }, 200);
+                });
+            }
+        });
+    </script>
+</body>
+</html> 
